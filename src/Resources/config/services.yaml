@@ -1,0 +1,11 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  Tourze\ArchitectureDiagramBundle\Command\:
+    resource: '../../Command/'
+  Tourze\ArchitectureDiagramBundle\Scanner\:
+    resource: '../../Scanner/'
+  Tourze\ArchitectureDiagramBundle\Generator\:
+    resource: '../../Generator/'
