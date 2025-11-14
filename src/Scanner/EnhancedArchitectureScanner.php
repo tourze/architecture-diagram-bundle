@@ -41,17 +41,26 @@ class EnhancedArchitectureScanner
         );
 
         $this->scanComponents($projectPath, $architecture);
+        $this->analyzeProjectArchitecture($projectPath, $architecture);
+        $this->finalizeArchitectureMetadata($architecture, $projectPath);
+
+        return $architecture;
+    }
+
+    private function analyzeProjectArchitecture(string $projectPath, Architecture $architecture): void
+    {
         $this->analyzeInfrastructure($projectPath, $architecture);
         $this->analyzeDataFlow($projectPath, $architecture);
         $this->analyzeExternalIntegrations($projectPath, $architecture);
         $this->analyzeSecurityMeasures($projectPath, $architecture);
         $this->analyzeUserAccess($projectPath, $architecture);
         $this->analyzeManagementFeatures($projectPath, $architecture);
+    }
 
+    private function finalizeArchitectureMetadata(Architecture $architecture, string $projectPath): void
+    {
         $architecture->setMetadata('scan_time', date('Y-m-d H:i:s'));
         $architecture->setMetadata('project_path', $projectPath);
-
-        return $architecture;
     }
 
     private function scanComponents(string $projectPath, Architecture $architecture): void
@@ -76,13 +85,8 @@ class EnhancedArchitectureScanner
 
     private function analyzeDockerCompose(string $projectPath, Architecture $architecture): void
     {
-        $dockerFile = $projectPath . '/docker-compose.yml';
-        if (!file_exists($dockerFile)) {
-            return;
-        }
-
-        $content = file_get_contents($dockerFile);
-        if (false === $content) {
+        $content = $this->readDockerComposeContent($projectPath);
+        if (null === $content) {
             return;
         }
 
@@ -92,99 +96,93 @@ class EnhancedArchitectureScanner
         $this->addMessageQueueInfrastructure($content, $architecture);
     }
 
-    private function addDatabaseInfrastructure(string $content, Architecture $architecture): void
+    private function readDockerComposeContent(string $projectPath): ?string
     {
-        if (!$this->hasDatabaseService($content)) {
-            return;
+        $dockerFile = $projectPath . '/docker-compose.yml';
+        if (!file_exists($dockerFile)) {
+            return null;
         }
 
-        $architecture->addInfrastructure('mysql_server', 'MySQL数据库服务器', 'database', [
-            'version' => '8.0',
-            'storage' => '100GB SSD',
-            'memory' => '16GB',
-        ]);
+        $content = file_get_contents($dockerFile);
 
-        $architecture->addComponent(new Component(
-            'main_database',
-            'database',
-            '主数据库',
-            'MySQL 8.0',
-            '存储核心业务数据'
-        ));
+        return false === $content ? null : $content;
     }
 
-    private function hasDatabaseService(string $content): bool
+    private function addDatabaseInfrastructure(string $content, Architecture $architecture): void
     {
-        return str_contains($content, 'mysql') || str_contains($content, 'mariadb');
+        if (str_contains($content, 'mysql') || str_contains($content, 'mariadb')) {
+            $architecture->addInfrastructure('mysql_server', 'MySQL数据库服务器', 'database', [
+                'version' => '8.0',
+                'storage' => '100GB SSD',
+                'memory' => '16GB',
+            ]);
+
+            $architecture->addComponent(new Component(
+                'main_database',
+                'database',
+                '主数据库',
+                'MySQL 8.0',
+                '存储核心业务数据'
+            ));
+        }
     }
 
     private function addCacheInfrastructure(string $content, Architecture $architecture): void
     {
-        if (!str_contains($content, 'redis')) {
-            return;
+        if (str_contains($content, 'redis')) {
+            $architecture->addInfrastructure('redis_server', 'Redis缓存服务器', 'cache', [
+                'version' => '7.0',
+                'memory' => '8GB',
+                'persistence' => 'AOF+RDB',
+            ]);
+
+            $architecture->addComponent(new Component(
+                'cache_layer',
+                'cache',
+                '缓存层',
+                'Redis',
+                '提供高性能缓存服务'
+            ));
         }
-
-        $architecture->addInfrastructure('redis_server', 'Redis缓存服务器', 'cache', [
-            'version' => '7.0',
-            'memory' => '8GB',
-            'persistence' => 'AOF+RDB',
-        ]);
-
-        $architecture->addComponent(new Component(
-            'cache_layer',
-            'cache',
-            '缓存层',
-            'Redis',
-            '提供高性能缓存服务'
-        ));
     }
 
     private function addLoadBalancerInfrastructure(string $content, Architecture $architecture): void
     {
-        if (!str_contains($content, 'nginx')) {
-            return;
+        if (str_contains($content, 'nginx')) {
+            $architecture->addInfrastructure('nginx_lb', 'Nginx负载均衡器', 'load_balancer', [
+                'version' => '1.21',
+                'ssl' => 'TLS 1.3',
+                'workers' => '4',
+            ]);
+
+            $architecture->addComponent(new Component(
+                'load_balancer',
+                'load_balancer',
+                '负载均衡器',
+                'Nginx',
+                '分发请求到应用服务器'
+            ));
         }
-
-        $architecture->addInfrastructure('nginx_lb', 'Nginx负载均衡器', 'load_balancer', [
-            'version' => '1.21',
-            'ssl' => 'TLS 1.3',
-            'workers' => '4',
-        ]);
-
-        $architecture->addComponent(new Component(
-            'load_balancer',
-            'load_balancer',
-            '负载均衡器',
-            'Nginx',
-            '分发请求到应用服务器'
-        ));
     }
 
     private function addMessageQueueInfrastructure(string $content, Architecture $architecture): void
     {
-        if (!$this->hasMessageQueueService($content)) {
-            return;
+        if (str_contains($content, 'rabbitmq') || str_contains($content, 'kafka')) {
+            $queueType = str_contains($content, 'rabbitmq') ? 'RabbitMQ' : 'Kafka';
+
+            $architecture->addInfrastructure('message_queue', '消息队列服务器', 'message_broker', [
+                'type' => $queueType,
+                'memory' => '4GB',
+            ]);
+
+            $architecture->addComponent(new Component(
+                'message_broker',
+                'message_broker',
+                '消息队列',
+                $queueType,
+                '异步消息处理'
+            ));
         }
-
-        $queueType = str_contains($content, 'rabbitmq') ? 'RabbitMQ' : 'Kafka';
-
-        $architecture->addInfrastructure('message_queue', '消息队列服务器', 'message_broker', [
-            'type' => $queueType,
-            'memory' => '4GB',
-        ]);
-
-        $architecture->addComponent(new Component(
-            'message_broker',
-            'message_broker',
-            '消息队列',
-            $queueType,
-            '异步消息处理'
-        ));
-    }
-
-    private function hasMessageQueueService(string $content): bool
-    {
-        return str_contains($content, 'rabbitmq') || str_contains($content, 'kafka');
     }
 
     private function addDefaultAppServers(Architecture $architecture): void
@@ -200,13 +198,18 @@ class EnhancedArchitectureScanner
     private function analyzeDataFlow(string $projectPath, Architecture $architecture): void
     {
         $components = $this->getComponentsByTypes($architecture, ['entity', 'repository', 'service', 'controller']);
+        $this->addApplicationDataFlows($architecture, $components);
+        $this->addDataCollectorFlow($architecture);
+    }
 
+    /** @param array<string, Component[]> $components */
+    private function addApplicationDataFlows(Architecture $architecture, array $components): void
+    {
         $this->addControllerServiceFlow($architecture, $components);
         $this->addServiceRepositoryFlow($architecture, $components);
         $this->addRepositoryDatabaseFlow($architecture, $components);
         $this->addServiceCacheFlow($architecture, $components);
         $this->addServiceMessageFlow($architecture, $components);
-        $this->addDataCollectorFlow($architecture);
     }
 
     /**
@@ -331,11 +334,11 @@ class EnhancedArchitectureScanner
 
     private function analyzeExternalIntegrations(string $projectPath, Architecture $architecture): void
     {
-        $this->analyzeEnvIntegrations($projectPath, $architecture);
+        $this->addEnvBasedIntegrations($projectPath, $architecture);
         $this->analyzeComposerIntegrations($projectPath, $architecture);
     }
 
-    private function analyzeEnvIntegrations(string $projectPath, Architecture $architecture): void
+    private function addEnvBasedIntegrations(string $projectPath, Architecture $architecture): void
     {
         $envContent = $this->readFileContent($projectPath . '/.env');
         if (null === $envContent) {
@@ -343,7 +346,6 @@ class EnhancedArchitectureScanner
         }
 
         $services = $architecture->getComponentsByType('service');
-
         $this->addPaymentIntegration($envContent, $architecture, $services);
         $this->addMessagingIntegrations($envContent, $architecture);
         $this->addAuthIntegration($envContent, $architecture);
@@ -385,10 +387,15 @@ class EnhancedArchitectureScanner
             return null;
         }
 
-        return array_merge(
-            $decoded['require'] ?? [],
-            $decoded['require-dev'] ?? []
-        );
+        $require = $decoded['require'] ?? [];
+        $requireDev = $decoded['require-dev'] ?? [];
+
+        if (!is_array($require) || !is_array($requireDev)) {
+            return null;
+        }
+
+        /** @var array<string, string> */
+        return array_merge($require, $requireDev);
     }
 
     /** @param array<Component> $services */
@@ -409,25 +416,38 @@ class EnhancedArchitectureScanner
 
     private function addMessagingIntegrations(string $envContent, Architecture $architecture): void
     {
-        if ($this->hasSmsConfig($envContent)) {
-            $architecture->addExternalSystem('sms_provider', '短信服务商', 'messaging', 'REST API');
-            $architecture->addDataFlow(
-                'notification_service',
-                'sms_provider',
-                '短信通知',
-                '发送验证码和通知短信'
-            );
+        $this->addSmsIntegration($envContent, $architecture);
+        $this->addEmailIntegration($envContent, $architecture);
+    }
+
+    private function addSmsIntegration(string $envContent, Architecture $architecture): void
+    {
+        if (!$this->hasSmsConfig($envContent)) {
+            return;
         }
 
-        if ($this->hasEmailConfig($envContent)) {
-            $architecture->addExternalSystem('email_provider', '邮件服务商', 'email', 'SMTP');
-            $architecture->addDataFlow(
-                'notification_service',
-                'email_provider',
-                '邮件通知',
-                '发送系统邮件通知'
-            );
+        $architecture->addExternalSystem('sms_provider', '短信服务商', 'messaging', 'REST API');
+        $architecture->addDataFlow(
+            'notification_service',
+            'sms_provider',
+            '短信通知',
+            '发送验证码和通知短信'
+        );
+    }
+
+    private function addEmailIntegration(string $envContent, Architecture $architecture): void
+    {
+        if (!$this->hasEmailConfig($envContent)) {
+            return;
         }
+
+        $architecture->addExternalSystem('email_provider', '邮件服务商', 'email', 'SMTP');
+        $architecture->addDataFlow(
+            'notification_service',
+            'email_provider',
+            '邮件通知',
+            '发送系统邮件通知'
+        );
     }
 
     private function addAuthIntegration(string $envContent, Architecture $architecture): void
@@ -491,49 +511,40 @@ class EnhancedArchitectureScanner
 
     private function hasPaymentConfig(string $envContent): bool
     {
-        return $this->hasAnyConfigPattern($envContent, ['PAYMENT_', 'STRIPE_', 'PAYPAL_']);
+        return str_contains($envContent, 'PAYMENT_')
+            || str_contains($envContent, 'STRIPE_')
+            || str_contains($envContent, 'PAYPAL_');
     }
 
     private function hasSmsConfig(string $envContent): bool
     {
-        return $this->hasAnyConfigPattern($envContent, ['SMS_', 'TWILIO_']);
+        return str_contains($envContent, 'SMS_') || str_contains($envContent, 'TWILIO_');
     }
 
     private function hasEmailConfig(string $envContent): bool
     {
-        return $this->hasAnyConfigPattern($envContent, ['MAIL_', 'SMTP_']);
+        return str_contains($envContent, 'MAIL_') || str_contains($envContent, 'SMTP_');
     }
 
     private function hasOAuthConfig(string $envContent): bool
     {
-        return $this->hasAnyConfigPattern($envContent, ['OAUTH_', 'GOOGLE_', 'FACEBOOK_']);
+        return str_contains($envContent, 'OAUTH_')
+            || str_contains($envContent, 'GOOGLE_')
+            || str_contains($envContent, 'FACEBOOK_');
     }
 
     private function hasCdnConfig(string $envContent): bool
     {
-        return $this->hasAnyConfigPattern($envContent, ['CDN_', 'CLOUDFLARE_']);
-    }
-
-    /** @param string[] $patterns */
-    private function hasAnyConfigPattern(string $content, array $patterns): bool
-    {
-        foreach ($patterns as $pattern) {
-            if (str_contains($content, $pattern)) {
-                return true;
-            }
-        }
-
-        return false;
+        return str_contains($envContent, 'CDN_') || str_contains($envContent, 'CLOUDFLARE_');
     }
 
     private function analyzeSecurityMeasures(string $projectPath, Architecture $architecture): void
     {
-        $this->addBasicSecurityMeasures($architecture);
-        $this->addConfigBasedSecurityMeasures($projectPath, $architecture);
-        $this->addSecurityComponents($architecture);
+        $this->addStandardSecurityMeasures($architecture);
+        $this->addAdvancedSecurityFromConfig($projectPath, $architecture);
     }
 
-    private function addBasicSecurityMeasures(Architecture $architecture): void
+    private function addStandardSecurityMeasures(Architecture $architecture): void
     {
         $architecture->addSecurityMeasure('firewall', 'Web应用防火墙', 'WAF', '所有入站流量');
         $architecture->addSecurityMeasure('ssl', 'SSL/TLS加密', 'encryption', 'HTTPS通信');
@@ -542,24 +553,26 @@ class EnhancedArchitectureScanner
         $architecture->addSecurityMeasure('audit', '审计日志系统', 'logging', '所有关键操作');
         $architecture->addSecurityMeasure('backup', '自动备份系统', 'backup', '数据库和文件');
         $architecture->addSecurityMeasure('monitoring', '安全监控系统', 'monitoring', '异常行为检测');
+
+        $this->addSecurityComponents($architecture);
     }
 
-    private function addConfigBasedSecurityMeasures(string $projectPath, Architecture $architecture): void
+    private function addAdvancedSecurityFromConfig(string $projectPath, Architecture $architecture): void
     {
         $securityContent = $this->readFileContent($projectPath . '/config/packages/security.yaml');
         if (null === $securityContent) {
             return;
         }
 
-        if ($this->hasAnyConfigPattern($securityContent, ['jwt', 'lexik_jwt'])) {
+        if (str_contains($securityContent, 'jwt') || str_contains($securityContent, 'lexik_jwt')) {
             $architecture->addSecurityMeasure('jwt', 'JWT令牌认证', 'token', 'API访问');
         }
 
-        if ($this->hasAnyConfigPattern($securityContent, ['two_factor', '2fa'])) {
+        if (str_contains($securityContent, 'two_factor') || str_contains($securityContent, '2fa')) {
             $architecture->addSecurityMeasure('2fa', '双因素认证', '2FA', '敏感操作');
         }
 
-        if ($this->hasAnyConfigPattern($securityContent, ['rate_limit'])) {
+        if (str_contains($securityContent, 'rate_limit')) {
             $architecture->addSecurityMeasure('rate_limit', '请求频率限制', 'rate_limiting', 'API保护');
         }
     }
@@ -586,7 +599,7 @@ class EnhancedArchitectureScanner
     private function analyzeUserAccess(string $projectPath, Architecture $architecture): void
     {
         $this->addWebInterface($projectPath, $architecture);
-        $this->addApiInterfaces($projectPath, $architecture);
+        $this->addApiInterfacesBasedOnRoutes($projectPath, $architecture);
         $this->addCliInterface($projectPath, $architecture);
     }
 
@@ -612,7 +625,7 @@ class EnhancedArchitectureScanner
         );
     }
 
-    private function addApiInterfaces(string $projectPath, Architecture $architecture): void
+    private function addApiInterfacesBasedOnRoutes(string $projectPath, Architecture $architecture): void
     {
         $routesContent = $this->readFileContent($projectPath . '/config/routes.yaml');
         if (null === $routesContent) {
@@ -718,18 +731,23 @@ class EnhancedArchitectureScanner
 
     private function analyzeManagementFeatures(string $projectPath, Architecture $architecture): void
     {
-        $this->addManagementComponents($architecture);
-        $this->addCiCdPipeline($projectPath, $architecture);
-        $this->addManagementDataFlows($architecture);
+        $this->addSystemManagementComponents($architecture);
+        $this->addCiCdPipelineComponents($projectPath, $architecture);
     }
 
-    private function addManagementComponents(Architecture $architecture): void
+    private function addSystemManagementComponents(Architecture $architecture): void
     {
         $architecture->addComponent(new Component('config_manager', 'config_service', '配置管理', 'Symfony Config', '系统配置管理服务'));
         $architecture->addComponent(new Component('log_aggregator', 'logging_service', '日志聚合', 'Monolog', '集中式日志管理'));
         $architecture->addComponent(new Component('health_monitor', 'monitoring_service', '健康监控', 'Prometheus/Grafana', '系统健康状态监控'));
         $architecture->addComponent(new Component('deployment_manager', 'deployment', '部署管理', 'CI/CD Pipeline', '自动化部署管理'));
         $architecture->addComponent(new Component('backup_manager', 'backup', '备份管理', 'Backup Script', '定期备份和恢复'));
+    }
+
+    private function addCiCdPipelineComponents(string $projectPath, Architecture $architecture): void
+    {
+        $this->addCiCdPipeline($projectPath, $architecture);
+        $this->addManagementDataFlows($architecture);
     }
 
     private function addCiCdPipeline(string $projectPath, Architecture $architecture): void

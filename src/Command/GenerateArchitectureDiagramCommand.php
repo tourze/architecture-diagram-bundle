@@ -65,7 +65,9 @@ class GenerateArchitectureDiagramCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $projectPath = $this->resolveProjectPath($input->getArgument('project'));
+        $projectPathArg = $input->getArgument('project');
+        assert(is_string($projectPathArg), 'Project argument must be a string');
+        $projectPath = $this->resolveProjectPath($projectPathArg);
 
         if (!$this->validateProjectPath($projectPath, $io)) {
             return Command::FAILURE;
@@ -142,8 +144,11 @@ class GenerateArchitectureDiagramCommand extends Command
     /** @return array{level: string, include_c4: bool, group_by_layer: bool} */
     private function buildGenerationOptions(InputInterface $input): array
     {
+        $level = $input->getOption('level');
+        assert(is_string($level) || null === $level, 'Level option must be a string or null');
+
         return [
-            'level' => $input->getOption('level') ?? 'component',
+            'level' => $level ?? 'component',
             'include_c4' => false === $input->getOption('no-c4'),
             'group_by_layer' => false === $input->getOption('no-layers'),
         ];
@@ -152,6 +157,7 @@ class GenerateArchitectureDiagramCommand extends Command
     private function outputResult(InputInterface $input, SymfonyStyle $io, string $plantUML): void
     {
         $outputFile = $input->getOption('output');
+        assert(is_string($outputFile) || null === $outputFile, 'Output option must be a string or null');
 
         if (null !== $outputFile) {
             $this->saveToFile($outputFile, $plantUML, $io);

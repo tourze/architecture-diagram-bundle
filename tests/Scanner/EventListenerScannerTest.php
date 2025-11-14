@@ -69,7 +69,9 @@ class TestEventListener
 
             $metadata = $component->getMetadata();
             $this->assertArrayHasKey('events', $metadata);
-            $this->assertContains('kernel.request', $metadata['events']);
+            $events = $metadata['events'];
+            $this->assertIsIterable($events);
+            $this->assertContains('kernel.request', $events);
         } finally {
             $this->removeDirectory($tempDir);
         }
@@ -119,8 +121,10 @@ class TestEventSubscriber implements EventSubscriberInterface
 
             $metadata = $component->getMetadata();
             $this->assertTrue($metadata['isSubscriber']);
-            $this->assertContains('kernel.request', $metadata['events']);
-            $this->assertContains('kernel.response', $metadata['events']);
+            $events = $metadata['events'];
+            $this->assertIsIterable($events);
+            $this->assertContains('kernel.request', $events);
+            $this->assertContains('kernel.response', $events);
         } finally {
             $this->removeDirectory($tempDir);
         }

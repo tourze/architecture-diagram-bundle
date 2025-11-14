@@ -102,7 +102,9 @@ class GenerateEnhancedArchitectureCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $projectPath = $this->resolveProjectPath($input->getArgument('project'));
+        $projectPathArg = $input->getArgument('project');
+        assert(is_string($projectPathArg), 'Project argument must be a string');
+        $projectPath = $this->resolveProjectPath($projectPathArg);
 
         if (!is_dir($projectPath)) {
             $io->error("项目路径不存在: {$projectPath}");
@@ -123,7 +125,12 @@ class GenerateEnhancedArchitectureCommand extends Command
             }
 
             $type = $input->getOption('type');
-            $outputDir = $input->getOption('output-dir') ?? $projectPath;
+            assert(is_string($type) || null === $type, 'Type option must be a string or null');
+            $type = $type ?? 'all';
+
+            $outputDir = $input->getOption('output-dir');
+            assert(is_string($outputDir) || null === $outputDir, 'Output-dir option must be a string or null');
+            $outputDir = $outputDir ?? $projectPath;
 
             if (!is_dir($outputDir)) {
                 mkdir($outputDir, 0o755, true);
@@ -240,13 +247,17 @@ class GenerateEnhancedArchitectureCommand extends Command
     /** @param array<string, mixed> $stats */
     private function displayLayerDistribution(SymfonyStyle $io, array $stats): void
     {
-        if ([] === $stats['components_by_layer']) {
+        $componentsByLayer = $stats['components_by_layer'] ?? [];
+        assert(is_array($componentsByLayer), 'Components by layer must be an array');
+
+        if ([] === $componentsByLayer) {
             return;
         }
 
         $io->text('📦 层级分布:');
         $rows = [];
-        foreach ($stats['components_by_layer'] as $layer => $count) {
+        foreach ($componentsByLayer as $layer => $count) {
+            assert(is_string($layer), 'Layer must be a string');
             $emoji = $this->getLayerEmoji($layer);
             $rows[] = ["{$emoji} " . ucfirst($layer), $count];
         }
@@ -256,13 +267,17 @@ class GenerateEnhancedArchitectureCommand extends Command
     /** @param array<string, mixed> $stats */
     private function displayTypeDistribution(SymfonyStyle $io, array $stats): void
     {
-        if ([] === $stats['components_by_type']) {
+        $componentsByType = $stats['components_by_type'] ?? [];
+        assert(is_array($componentsByType), 'Components by type must be an array');
+
+        if ([] === $componentsByType) {
             return;
         }
 
         $io->text('🏷️ 组件类型分布:');
         $typeRows = [];
-        foreach ($stats['components_by_type'] as $type => $count) {
+        foreach ($componentsByType as $type => $count) {
+            assert(is_string($type), 'Type must be a string');
             $typeRows[] = [ucfirst(str_replace('_', ' ', $type)), $count];
         }
         $io->table(['类型', '数量'], $typeRows);
@@ -287,15 +302,19 @@ class GenerateEnhancedArchitectureCommand extends Command
     /** @param array<string, mixed> $infra */
     private function formatInfraSpecs(array $infra): string
     {
-        if (!isset($infra['properties']) || [] === $infra['properties']) {
+        $properties = $infra['properties'] ?? [];
+        if (!is_array($properties) || [] === $properties) {
             return '-';
         }
 
-        return implode(', ', array_map(
-            fn ($k, $v) => "{$k}: {$v}",
-            array_keys($infra['properties']),
-            $infra['properties']
-        ));
+        $specs = [];
+        foreach ($properties as $k => $v) {
+            if (is_scalar($v) || (is_object($v) && method_exists($v, '__toString'))) {
+                $specs[] = "{$k}: " . (string) $v;
+            }
+        }
+
+        return implode(', ', $specs);
     }
 
     private function displayExternalSystems(SymfonyStyle $io, Architecture $architecture): void

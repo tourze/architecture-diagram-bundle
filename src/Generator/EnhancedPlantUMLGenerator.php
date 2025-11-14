@@ -163,13 +163,30 @@ class EnhancedPlantUMLGenerator
         $output = [];
         $output[] = 'Boundary(hardware, "硬件基础设施") {';
         foreach ($infrastructures as $id => $infra) {
-            $specs = [] !== $infra['properties'] ? implode(', ', array_map(fn ($k, $v) => "{$k}: {$v}", array_keys($infra['properties']), $infra['properties'])) : '';
+            $specs = $this->formatInfrastructureSpecs($infra['properties'] ?? []);
             $output[] = sprintf('    System(%s, "%s", "%s")', $id, $infra['name'], $specs);
         }
         $output[] = '}';
         $output[] = '';
 
         return $output;
+    }
+
+    /** @param mixed $properties */
+    private function formatInfrastructureSpecs($properties): string
+    {
+        if (!is_array($properties) || [] === $properties) {
+            return '';
+        }
+
+        $specParts = [];
+        foreach ($properties as $k => $v) {
+            if (is_scalar($v) || (is_object($v) && method_exists($v, '__toString'))) {
+                $specParts[] = "{$k}: " . (string) $v;
+            }
+        }
+
+        return implode(', ', $specParts);
     }
 
     /** @return array<string> */

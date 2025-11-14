@@ -77,9 +77,11 @@ class UserService
 
             $metadata = $component->getMetadata();
             $this->assertArrayHasKey('methods', $metadata);
-            $this->assertContains('findUser', $metadata['methods']);
-            $this->assertContains('saveUser', $metadata['methods']);
-            $this->assertNotContains('validateUser', $metadata['methods']); // private method should not be included
+            $methods = $metadata['methods'];
+            $this->assertIsIterable($methods);
+            $this->assertContains('findUser', $methods);
+            $this->assertContains('saveUser', $methods);
+            $this->assertNotContains('validateUser', $methods); // private method should not be included
 
             $this->assertStringContainsString('2 public methods', $component->getDescription());
         } finally {
