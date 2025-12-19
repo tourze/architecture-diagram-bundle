@@ -6,7 +6,7 @@ namespace Tourze\ArchitectureDiagramBundle\DependencyInjection;
 
 use Tourze\SymfonyDependencyServiceLoader\AutoExtension;
 
-class ArchitectureDiagramExtension extends AutoExtension
+final class ArchitectureDiagramExtension extends AutoExtension
 {
     protected function getConfigDir(): string
     {
